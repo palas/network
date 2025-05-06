@@ -33,9 +33,14 @@ data CmsgHdr = CmsgHdr {
   } deriving (Eq, Show)
 
 instance Storable CmsgHdr where
+#ifndef __wasi__
   sizeOf    ~_ = (#size struct cmsghdr)
+#else
+  sizeOf _ = 0
+#endif
   alignment ~_ = alignment (0 :: CInt)
 
+#ifndef __wasi__
   peek p = do
     len <- (#peek struct cmsghdr, cmsg_len)   p
     lvl <- (#peek struct cmsghdr, cmsg_level) p
@@ -47,6 +52,10 @@ instance Storable CmsgHdr where
     (#poke struct cmsghdr, cmsg_len)   p len
     (#poke struct cmsghdr, cmsg_level) p lvl
     (#poke struct cmsghdr, cmsg_type)  p typ
+#else
+  peek _ = return $ CmsgHdr 0 0 0
+  poke _ _ = return ()
+#endif
 
 withCmsgs :: [Cmsg] -> (Ptr CmsgHdr -> Int -> IO a) -> IO a
 withCmsgs cmsgs0 action

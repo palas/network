@@ -76,22 +76,42 @@ WSARecvMsg (SOCKET s, LPWSAMSG lpMsg, LPDWORD lpdwNumberOfBytesRecvd,
 }
 #else
 struct cmsghdr *cmsg_firsthdr(struct msghdr *mhdr) {
+#ifndef __wasi__
   return (CMSG_FIRSTHDR(mhdr));
+#else
+  return NULL;
+#endif
 }
 
 struct cmsghdr *cmsg_nxthdr(struct msghdr *mhdr, struct cmsghdr *cmsg) {
+#ifndef __wasi__
   return (CMSG_NXTHDR(mhdr, cmsg));
+#else
+  return NULL;
+#endif
 }
 
 unsigned char *cmsg_data(struct cmsghdr *cmsg) {
+#ifndef __wasi__
   return (CMSG_DATA(cmsg));
+#else
+  return NULL;
+#endif
 }
 
 size_t cmsg_space(size_t l) {
+#ifndef __wasi__
   return (CMSG_SPACE(l));
+#else
+  return 0;
+#endif
 }
 
 size_t cmsg_len(size_t l) {
+#ifndef __wasi__
   return (CMSG_LEN(l));
+#else
+  return 0;
+#endif
 }
 #endif /* _WIN32 */

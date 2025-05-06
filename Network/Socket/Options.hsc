@@ -484,7 +484,6 @@ getSocketType s = unpackSocketType <$> getSockOpt s Type
 #if __GLASGOW_HASKELL__ >= 806
 {-# COMPLETE CustomSockOpt #-}
 #endif
-#ifdef SO_LINGER
 -- | Low level @SO_LINGER@ option value, which can be used with 'setSockOpt' or
 -- @'setSockOptValue' . 'SockOptValue'@.
 data StructLinger = StructLinger {
@@ -496,6 +495,7 @@ data StructLinger = StructLinger {
   }
   deriving (Eq, Ord, Show)
 
+#ifdef SO_LINGER
 instance Storable StructLinger where
     sizeOf    ~_ = (#const sizeof(struct linger))
     alignment ~_ = alignment (0 :: CInt)
@@ -508,6 +508,12 @@ instance Storable StructLinger where
     poke p (StructLinger onoff linger) = do
         (#poke struct linger, l_onoff)  p onoff
         (#poke struct linger, l_linger) p linger
+#else
+instance Storable StructLinger where
+    sizeOf _ = 0
+    alignment _ = 0
+    peek _ = return (StructLinger 0 0)
+    poke _ _ = return ()
 #endif
 
 -- | A type that can hold any 'Storable' socket option value (e.g.

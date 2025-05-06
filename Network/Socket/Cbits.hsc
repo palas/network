@@ -8,7 +8,11 @@ import Network.Socket.Imports
 -- 128 is good enough for normal network servers but
 -- is too small for high performance servers.
 maxListenQueue :: Int
+#if defined(__wasi__)
+maxListenQueue = 0
+#else
 maxListenQueue = #const SOMAXCONN
+#endif
 
 #if defined(mingw32_HOST_OS)
 wsaNotInitialized :: CInt

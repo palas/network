@@ -81,14 +81,24 @@ aiFlagMapping =
 #else
      (AI_ALL, 0),
 #endif
+#ifndef __wasi__
      (AI_CANONNAME, #const AI_CANONNAME),
+#else
+     (AI_CANONNAME, 0),
+#endif
+#ifndef __wasi__
      (AI_NUMERICHOST, #const AI_NUMERICHOST),
+#else
+     (AI_NUMERICHOST, 0),
+#endif
 #if HAVE_DECL_AI_NUMERICSERV
      (AI_NUMERICSERV, #const AI_NUMERICSERV),
 #else
      (AI_NUMERICSERV, 0),
 #endif
+#ifndef __wasi__
      (AI_PASSIVE, #const AI_PASSIVE),
+#endif
 #if HAVE_DECL_AI_V4MAPPED
      (AI_V4MAPPED, #const AI_V4MAPPED)
 #else
@@ -111,9 +121,14 @@ data AddrInfo = AddrInfo {
   } deriving (Eq, Show)
 
 instance Storable AddrInfo where
+#ifndef __wasi__
     sizeOf    ~_ = #const sizeof(struct addrinfo)
+#else
+    sizeOf _ = 0
+#endif
     alignment ~_ = alignment (0 :: CInt)
 
+#ifndef __wasi__
     peek p = do
         ai_flags <- (#peek struct addrinfo, ai_flags) p
         ai_family <- (#peek struct addrinfo, ai_family) p
@@ -121,11 +136,9 @@ instance Storable AddrInfo where
         ai_protocol <- (#peek struct addrinfo, ai_protocol) p
         ai_addr <- (#peek struct addrinfo, ai_addr) p >>= peekSockAddr
         ai_canonname_ptr <- (#peek struct addrinfo, ai_canonname) p
-
         ai_canonname <- if ai_canonname_ptr == nullPtr
                         then return Nothing
                         else Just <$> peekCString ai_canonname_ptr
-
         return $ AddrInfo {
             addrFlags = unpackBits aiFlagMapping ai_flags
           , addrFamily = unpackFamily ai_family
@@ -134,7 +147,19 @@ instance Storable AddrInfo where
           , addrAddress = ai_addr
           , addrCanonName = ai_canonname
           }
+#else
+    peek _ = do
+        return $ AddrInfo {
+            addrFlags = []
+          , addrFamily = UnsupportedFamily 
+          , addrSocketType = UnsupportedSocketType 
+          , addrProtocol = 0
+          , addrAddress = SockAddrUnix "unsupported"
+          , addrCanonName = Nothing
+          }       
+#endif
 
+#ifndef __wasi__
     poke p (AddrInfo flags family sockType protocol _ _) = do
         let c_stype = packSocketType sockType
 
@@ -149,6 +174,9 @@ instance Storable AddrInfo where
         (#poke struct addrinfo, ai_addr) p nullPtr
         (#poke struct addrinfo, ai_canonname) p nullPtr
         (#poke struct addrinfo, ai_next) p nullPtr
+#else
+    poke _ _ = return ()
+#endif
 
 -- | Flags that control the querying behaviour of 'getNameInfo'.
 --   For more information, see <https://tools.ietf.org/html/rfc3493#page-30>
@@ -175,12 +203,15 @@ data NameInfoFlag =
     deriving (Eq, Read, Show)
 
 niFlagMapping :: [(NameInfoFlag, CInt)]
-
+#ifndef __wasi__
 niFlagMapping = [(NI_DGRAM, #const NI_DGRAM),
                  (NI_NAMEREQD, #const NI_NAMEREQD),
                  (NI_NOFQDN, #const NI_NOFQDN),
                  (NI_NUMERICHOST, #const NI_NUMERICHOST),
                  (NI_NUMERICSERV, #const NI_NUMERICSERV)]
+#else
+niFlagMapping = []
+#endif
 
 -- | Default hints for address lookup with 'getAddrInfo'.
 --
@@ -318,6 +349,7 @@ getAddrInfoList hints node service =
     NE.toList <$> getAddrInfoNE hints node service
 
 followAddrInfo :: Ptr AddrInfo -> IO (NonEmpty AddrInfo)
+#ifndef __wasi__
 followAddrInfo ptr_ai
     -- POSIX requires that getaddrinfo(3) returns at least one addrinfo.
     -- See: http://pubs.opengroup.org/onlinepubs/9699919799/functions/getaddrinfo.html
@@ -335,6 +367,9 @@ followAddrInfo ptr_ai
             ptr' <- (# peek struct addrinfo, ai_next) ptr
             as' <- go ptr'
             return (a':as')
+#else
+followAddrInfo _ = ioError $ mkIOError NoSuchThing "Not implemented in wasi" Nothing Nothing
+#endif
 
 foreign import ccall safe "hsnet_getaddrinfo"
     c_getaddrinfo :: CString -> CString -> Ptr AddrInfo -> Ptr (Ptr AddrInfo)
@@ -382,6 +417,7 @@ getNameInfo
     -> Bool -- ^ whether to look up a service name
     -> SockAddr -- ^ the address to look up
     -> IO (Maybe HostName, Maybe ServiceName)
+#ifndef __wasi__
 getNameInfo flags doHost doService addr = alloc getnameinfo
   where
     alloc body = withSocketsDo $
@@ -419,6 +455,9 @@ getNameInfo flags doHost doService addr = alloc getnameinfo
       , show addr
       , ")"
       ]
+#else
+getNameInfo _ _ _ _ = return (Nothing, Nothing)
+#endif
 
 foreign import ccall safe "hsnet_getnameinfo"
     c_getnameinfo :: Ptr SockAddr -> CInt{-CSockLen???-} -> CString -> CSize -> CString

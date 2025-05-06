@@ -97,7 +97,9 @@ import GHC.IO (IO (..))
 
 import qualified Text.Read as P
 
+#ifndef __wasi__
 import Foreign.Marshal.Array
+#endif
 
 import Network.Socket.Imports
 
@@ -1096,12 +1098,14 @@ instance SocketAddress SockAddr where
     peekSocketAddress   = peekSockAddr
     pokeSocketAddress   = pokeSockAddr
 
+#ifndef __wasi__
 #if defined(mingw32_HOST_OS)
 type CSaFamily = (#type unsigned short)
 #elif defined(darwin_HOST_OS)
 type CSaFamily = (#type u_char)
 #else
 type CSaFamily = (#type sa_family_t)
+#endif
 #endif
 
 -- | Computes the storage requirements (in bytes) of the given
@@ -1144,8 +1148,10 @@ withSockAddr addr f = do
 -- structure, and attempting to do so could overflow the allocated storage
 -- space.  This constant holds the maximum allowable path length.
 --
+#ifndef __wasi__
 unixPathMax :: Int
 unixPathMax = #const sizeof(((struct sockaddr_un *)NULL)->sun_path)
+#endif
 
 -- We can't write an instance of 'Storable' for 'SockAddr' because
 -- @sockaddr@ is a sum type of variable size but
@@ -1156,6 +1162,7 @@ unixPathMax = #const sizeof(((struct sockaddr_un *)NULL)->sun_path)
 
 -- | Write the given 'SockAddr' to the given memory location.
 pokeSockAddr :: Ptr a -> SockAddr -> IO ()
+#ifndef __wasi__
 pokeSockAddr p sa@(SockAddrUnix path) = do
     let pathC = map castCharToCChar path
         len = length pathC
@@ -1187,9 +1194,13 @@ pokeSockAddr p (SockAddrInet6 port flow addr scope) = do
     (#poke struct sockaddr_in6, sin6_flowinfo) p flow
     (#poke struct sockaddr_in6, sin6_addr) p (In6Addr addr)
     (#poke struct sockaddr_in6, sin6_scope_id) p scope
+#else
+pokeSockAddr _ _ = return ()
+#endif
 
 -- | Read a 'SockAddr' from the given memory location.
 peekSockAddr :: Ptr SockAddr -> IO SockAddr
+#ifndef __wasi__
 peekSockAddr p = do
   family <- (#peek struct sockaddr, sa_family) p
   case family :: CSaFamily of
@@ -1209,6 +1220,9 @@ peekSockAddr p = do
     _ -> ioError $ userError $
       "Network.Socket.Types.peekSockAddr: address family '" ++
       show family ++ "' not supported."
+#else
+peekSockAddr _ = return (SockAddrUnix "unsupported")
+#endif
 
 ------------------------------------------------------------------------
 
@@ -1440,8 +1454,16 @@ instance Read PortNumber where
 ------------------------------------------------------------------------
 -- Helper functions
 
+#ifndef __wasi__
 foreign import ccall unsafe "string.h" memset :: Ptr a -> CInt -> CSize -> IO ()
+#else
+foreign import ccall unsafe "string.h" memset :: Ptr a -> CInt -> CSize -> IO CSize
+#endif
 
 -- | Zero a structure.
 zeroMemory :: Ptr a -> CSize -> IO ()
+#ifndef __wasi__
 zeroMemory dest nbytes = memset dest 0 (fromIntegral nbytes)
+#else
+zeroMemory dest nbytes = void $ memset dest 0 (fromIntegral nbytes)
+#endif

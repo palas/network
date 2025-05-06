@@ -144,20 +144,37 @@ hsnet_getnameinfo(const struct sockaddr* a,socklen_t b, char* c,
                   socklen_t d, char* e, socklen_t f, int g)
 # endif
 {
+#ifndef __wasi__
   return getnameinfo(a,b,c,d,e,f,g);
+#else
+  return 0;
+#endif
 }
 
 INLINE int
 hsnet_getaddrinfo(const char *hostname, const char *servname,
+#ifndef __wasi__
 		  const struct addrinfo *hints, struct addrinfo **res)
+#else
+		  const void *hints, void **res)
+#endif
 {
+#ifndef __wasi__
     return getaddrinfo(hostname, servname, hints, res);
+#else
+    return 0;
+#endif
 }
 
 INLINE void
+#ifndef __wasi__
 hsnet_freeaddrinfo(struct addrinfo *ai)
 {
     freeaddrinfo(ai);
+#else
+hsnet_freeaddrinfo(void *ai)
+{
+#endif
 }
 
 #ifndef IOV_MAX
